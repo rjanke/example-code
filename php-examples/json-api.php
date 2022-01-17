@@ -1,52 +1,47 @@
 <?php
 /**
- * An example of a JSON endpoint that uses JWTs
- * as an authentication method, uses a SQL 
- * connection to query data, and then returns
- * a barcode image encoded in Base64 in a
+ * An example of a JSON endpoint that uses 
+ * JSON Web Tokens (JWTs) as an authentication 
+ * method, uses a SQL connection to query data, 
+ * and then returns a barcode image encoded in Base64 in a
  * JSON response.
  * 
+ * Verbose error checking ommitted for program clarity.
  * 
  * @author Ryan Janke
  */
 
-// Load required JWT and barcode generator libraries.
-require_once('../vendor/autoload.php');
+// Load 3rd party Composer libs.
+require 'vendor/autoload.php';
 use Firebase\JWT\JWT;
 $generator = new Picqer\Barcode\BarcodeGeneratorPNG();
 
 //////////////////////////
 // CONFIG
 //////////////////////////
-//
-//
-// Set up database connection.
+
+// Set up PDO database connection.
 $dbname = "example_db";
-$db_username = "example_user";
-$db_password = "example_pass";
+$db_username = "example_username";
+$db_password = "example_password";
 $host = "db.example.com";
 
 try
 {
-    $dbcon = new PDO('mysql:host=' . $host . ';dbname=' . $dbname,
+    $db = new PDO('mysql:host=' . $host . ';dbname=' . $dbname,
                     $db_username, 
                     $db_password);
-    $dbcon->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+    $db->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 }
 catch(PDOException $e)
 {
-    $error = 'ERROR: ' . $e->getMessage();
-    // Log errors.
+    $error = $e->getMessage();
+    // Additional DB error logging here.
 }
 
-// Report all errors. Development only.
-ini_set("display_errors", 1);
-error_reporting(E_ALL);
-
-// JWT shared secret. Application that interacts with this API knows this secret.
+// JWT shared secret.
 $shared_secret = 'asupersecrettopsecretsuperlongstringthatisnottobeshared';
-//
-//
+
 //////////////////////////
 // CONFIG
 //////////////////////////
@@ -55,19 +50,17 @@ $shared_secret = 'asupersecrettopsecretsuperlongstringthatisnottobeshared';
 //////////////////////////
 // REQUEST AND JWT VERIFICATION
 //////////////////////////
-//
-//
-// Make sure Bearer Authorization token is set in HTTP header.
+
+// Ensure Bearer Authorization token is set in HTTP header.
 if (! preg_match('/Bearer\s(\S+)/', $_SERVER['HTTP_AUTHORIZATION'], $matches)) {
     header('HTTP/1.0 400 Bad Request');
     echo 'Token not found in request';
     exit;
 }
 
-// Save JWT or return 400 status.
+// Check for first captured parenthesized subpattern (the token itself).
 $jwt = $matches[1];
 if (! $jwt) {
-    // Token was able to be extracted from the authorization header
     header('HTTP/1.0 400 Bad Request');
     exit;
 }
@@ -77,15 +70,18 @@ $decoded = JWT::decode($jwt, $shared_secret, array('HS256'));
 
 // Person ID comes from 'sub' field in JWT.
 $person_id = $decoded->sub;
-//
-//
+
 //////////////////////////
 // REQUEST AND JWT VERIFICATION
 //////////////////////////
 
 
+//////////////////////////
+// QUERY DB AND CREATE JSON RESPONSE
+//////////////////////////
+
 // Query the database using the value from the JWT.
-$sql = $dbcon->prepare('SELECT 
+$sql = $db->prepare('SELECT 
                             barcode 
                         FROM 
                             PEOPLE 
@@ -97,7 +93,6 @@ $sql->execute();
 
 $result = $sql->fetch(PDO::FETCH_ASSOC);
 
-// If query returns a result.
 if ($result)
 {
     // Get barcode number from query.
@@ -131,9 +126,13 @@ if ($result)
     echo($json);
     exit();
 }
+// SQL query returned nothing.
 else 
 {
-    // SQL query returned nothing.
     header('HTTP/1.0 400 Bad Request');
     exit;
 }
+
+//////////////////////////
+// QUERY DB AND CREATE JSON RESPONSE
+//////////////////////////
